@@ -21,11 +21,18 @@ def get_connection():
     # Em desenvolvimento local, carregamos do .env
     if not os.getenv('RAILWAY_ENVIRONMENT'):
         load_dotenv()
+        database_url = os.getenv('DATABASE_URL')
+    else:
+        # Em produção, usamos o Private Networking do Railway
+        db_password = os.getenv('PGPASSWORD')
+        db_user = os.getenv('PGUSER', 'postgres')
+        db_name = os.getenv('PGDATABASE', 'railway')
+        # Usando o nome do serviço interno do Railway
+        database_url = f"postgresql://{db_user}:{db_password}@basictelecom.railway.internal:5432/{db_name}"
     
-    database_url = os.getenv('DATABASE_URL')
     if not database_url:
         st.error("⚠️ Variável de ambiente DATABASE_URL não encontrada!")
-        st.info("Configure a variável DATABASE_URL no Railway com a URL de conexão do PostgreSQL.")
+        st.info("Configure as variáveis de ambiente necessárias no Railway.")
         st.stop()
     
     try:

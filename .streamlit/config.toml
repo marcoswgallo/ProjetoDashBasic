@@ -6,7 +6,7 @@ enableCORS = false
 enableXsrfProtection = false
 
 [browser]
-serverAddress = "your-app-name.up.railway.app"
+serverAddress = "projetodashbasic-production.up.railway.app"
 gatherUsageStats = false
 
 [theme]

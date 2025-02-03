@@ -9,6 +9,8 @@ import psycopg2
 from datetime import datetime, timedelta
 import folium
 from streamlit_folium import folium_static
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 # Configuração da página
 st.set_page_config(
@@ -17,8 +19,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Configurações de cache
+# Configurações de cache e performance
 st.cache_data.clear()
+
+# Configurações de thread pool para queries paralelas
+thread_pool = ThreadPoolExecutor(max_workers=8)
 
 # Função para conectar ao banco de dados
 @st.cache_resource(ttl=3600)
@@ -26,12 +31,18 @@ def get_connection():
     database_url = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
     return psycopg2.connect(database_url)
 
+# Função para executar queries em paralelo
+def execute_parallel_query(query, params=None):
+    conn = get_connection()
+    try:
+        return pd.read_sql(query, conn, params=params)
+    finally:
+        conn.close()
+
 # Função para carregar dados
 @st.cache_data(ttl=3600)
-def load_data(start_date=None, end_date=None, base=None, limit=10000):
+def load_data(start_date=None, end_date=None, base=None):
     try:
-        conn = get_connection()
-        
         # Query base
         query = """
         SELECT 
@@ -47,7 +58,6 @@ def load_data(start_date=None, end_date=None, base=None, limit=10000):
         WHERE os.data_execucao IS NOT NULL
         """
         
-        # Adicionar filtros
         params = []
         if start_date and end_date:
             query += " AND os.data_execucao BETWEEN %s AND %s"
@@ -55,13 +65,28 @@ def load_data(start_date=None, end_date=None, base=None, limit=10000):
         if base and base != 'Todas':
             query += " AND b.nome = %s"
             params.append(base)
+
+        # Dividir a query em chunks por data para processamento paralelo
+        if start_date and end_date:
+            date_range = pd.date_range(start_date, end_date, freq='M')
+            queries = []
+            for i in range(len(date_range)):
+                chunk_start = date_range[i]
+                chunk_end = date_range[i + 1] if i + 1 < len(date_range) else end_date
+                chunk_query = query + f" AND os.data_execucao BETWEEN '{chunk_start}' AND '{chunk_end}'"
+                queries.append((chunk_query, []))
+
+            # Executar queries em paralelo
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                dfs = list(executor.map(lambda x: execute_parallel_query(x[0], x[1]), queries))
             
-        # Adicionar limite
-        query += " LIMIT %s"
-        params.append(limit)
-        
-        df = pd.read_sql(query, conn, params=params)
+            # Combinar resultados
+            df = pd.concat(dfs, ignore_index=True)
+        else:
+            df = execute_parallel_query(query, params)
+
         return df
+
     except Exception as e:
         st.error(f"Erro ao carregar dados: {str(e)}")
         return pd.DataFrame()
@@ -113,15 +138,13 @@ try:
     bases = load_bases()
     selected_base = st.sidebar.selectbox('Base', bases)
 
-    # Limite de registros
-    limit = st.sidebar.slider('Limite de registros', 1000, 50000, 10000, step=1000)
-
     # Carregar dados filtrados
-    df = load_data(date_range[0], date_range[1], selected_base, limit)
+    with st.spinner('Carregando dados...'):
+        df = load_data(date_range[0], date_range[1], selected_base)
 
     # Layout principal
     st.title("Dashboard de Análise de Serviços")
-    st.info(f"Mostrando {len(df)} registros dos {limit} solicitados")
+    st.info(f"Total de registros carregados: {len(df):,}")
 
     # Métricas principais em abas
     tab1, tab2 = st.tabs([" Métricas", " Gráficos"])
@@ -129,23 +152,23 @@ try:
     with tab1:
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total de Serviços", len(df))
+            st.metric("Total de Serviços", f"{len(df):,}")
         with col2:
-            st.metric("Total de Técnicos", df['tecnico'].nunique())
+            st.metric("Total de Técnicos", f"{df['tecnico'].nunique():,}")
         with col3:
             valor_total = df['valor_empresa'].sum()
             st.metric("Valor Total", f"R$ {valor_total:,.2f}")
         with col4:
             media_servicos = len(df) / df['tecnico'].nunique() if df['tecnico'].nunique() > 0 else 0
-            st.metric("Média de Serviços por Técnico", f"{media_servicos:.1f}")
+            st.metric("Média de Serviços por Técnico", f"{media_servicos:,.1f}")
 
     with tab2:
         # Gráficos em abas
         chart_tab1, chart_tab2, chart_tab3 = st.tabs([" Temporal", " Mapa", " Distribuição"])
         
         with chart_tab1:
-            # Análise temporal de serviços
-            daily_services = df.groupby(df['data_execucao'].dt.date).size().reset_index()
+            # Análise temporal de serviços com agregação otimizada
+            daily_services = df.set_index('data_execucao').resample('D').size().reset_index()
             daily_services.columns = ['data', 'quantidade']
 
             fig_temporal = px.line(daily_services, x='data', y='quantidade',
@@ -153,14 +176,28 @@ try:
             st.plotly_chart(fig_temporal, use_container_width=True)
 
         with chart_tab2:
-            # Mapa de calor
+            # Mapa de calor com clustering para melhor performance
             st.subheader("Distribuição Geográfica dos Serviços")
             map_df = df[df['latitude'].notna() & df['longitude'].notna()]
 
             if len(map_df) > 0:
-                m = folium.Map(location=[map_df['latitude'].mean(), map_df['longitude'].mean()], 
-                            zoom_start=12)
-                heat_data = [[row['latitude'], row['longitude']] for index, row in map_df.iterrows()]
+                # Usar K-means para reduzir pontos se necessário
+                if len(map_df) > 1000:
+                    coords = map_df[['latitude', 'longitude']].values
+                    kmeans = KMeans(n_clusters=1000, random_state=42)
+                    clusters = kmeans.fit(coords)
+                    centers = clusters.cluster_centers_
+                    
+                    m = folium.Map(location=[centers[:, 0].mean(), centers[:, 1].mean()],
+                                zoom_start=12)
+                    
+                    heat_data = [[row[0], row[1]] for row in centers]
+                else:
+                    m = folium.Map(location=[map_df['latitude'].mean(), map_df['longitude'].mean()],
+                                zoom_start=12)
+                    
+                    heat_data = [[row['latitude'], row['longitude']] for _, row in map_df.iterrows()]
+                
                 folium.plugins.HeatMap(heat_data).add_to(m)
                 folium_static(m)
             else:

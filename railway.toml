@@ -1,12 +1,10 @@
 [build]
 builder = "nixpacks"
-buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-startCommand = "streamlit run dashboard.py"
-healthcheckPath = "/"
-healthcheckTimeout = 100
-restartPolicyType = "on_failure"
+numReplicas = 1
+startCommand = ". /opt/venv/bin/activate && streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0"
+restartPolicyType = "ON_FAILURE"
 
 [deploy.envs]
-PORT = "8501"
+NIXPACKS_PYTHON_VERSION = "3.11"

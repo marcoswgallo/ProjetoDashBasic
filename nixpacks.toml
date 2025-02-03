@@ -1,11 +1,12 @@
 [phases.setup]
-nixPkgs = ['python311', 'postgresql']
-aptPkgs = ['python3-dev', 'libpq-dev']
+nixPkgs = ['python311', 'postgresql', 'python311Packages.pip']
+aptPkgs = ['python3-dev', 'libpq-dev', 'python3-pip']
 
 [phases.install]
 cmds = [
-  'pip install -r requirements.txt'
+  'python3 -m pip install --upgrade pip',
+  'python3 -m pip install -r requirements.txt'
 ]
 
 [start]
-cmd = "python -m streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0"
+cmd = "python3 -m streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0"

@@ -2,18 +2,11 @@
 builder = "nixpacks"
 
 [deploy]
-numReplicas = 1
-startCommand = ". /opt/venv/bin/activate && streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.baseUrlPath /"
+startCommand = "python -m streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false"
 restartPolicyType = "ON_FAILURE"
 healthcheckPath = "/"
 healthcheckTimeout = 100
 
 [deploy.envs]
-NIXPACKS_PYTHON_VERSION = "3.11"
-STREAMLIT_SERVER_PORT = "$PORT"
-STREAMLIT_SERVER_ADDRESS = "0.0.0.0"
-STREAMLIT_SERVER_HEADLESS = "true"
-STREAMLIT_SERVER_ENABLE_CORS = "false"
-STREAMLIT_SERVER_BASE_URL_PATH = "/"
-STREAMLIT_BROWSER_SERVER_ADDRESS = "projetodashbasic-production.up.railway.app"
+PYTHONUNBUFFERED = "1"
 DATABASE_URL = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@postgres.ferrovia.interno:5432/railway"

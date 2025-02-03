@@ -1,14 +1,11 @@
 [phases.setup]
-nixPkgs = ['python311', 'postgresql', 'gcc']
-aptPkgs = ['libpq-dev']
+nixPkgs = ['python311', 'postgresql']
+aptPkgs = ['python3-dev', 'libpq-dev']
 
 [phases.install]
 cmds = [
-  'python -m venv /opt/venv',
-  '. /opt/venv/bin/activate',
-  'pip install --upgrade pip',
   'pip install -r requirements.txt'
 ]
 
 [start]
-cmd = '. /opt/venv/bin/activate && streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0'
+cmd = "python -m streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0"

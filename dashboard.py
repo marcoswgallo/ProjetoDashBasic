@@ -20,38 +20,10 @@ def get_connection():
     try:
         st.write(" Conectando ao banco de dados...")
         
-        # Em produção, o Railway já fornece a DATABASE_URL como variável de ambiente
-        # Em desenvolvimento local, carregamos do .env
-        if not os.getenv('RAILWAY_ENVIRONMENT'):
-            load_dotenv()
+        # URL pública do PostgreSQL (funciona tanto em dev quanto em prod)
+        database_url = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
         
-        database_url = os.getenv('DATABASE_URL')
-        
-        # Se for apenas o hostname interno do Railway, construir a URL completa
-        if database_url and database_url.endswith('.railway.internal'):
-            st.info(" Usando conexão interna do Railway")
-            # Usando variáveis de ambiente do Railway
-            db_host = database_url  # Ex: basictelecom.railway.internal
-            db_user = os.getenv('PGUSER', 'postgres')
-            db_password = os.getenv('PGPASSWORD', 'fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa')
-            db_name = os.getenv('PGDATABASE', 'railway')
-            
-            # Tentar primeiro com a porta padrão do PostgreSQL
-            database_url = f"postgresql://{db_user}:{db_password}@{db_host}:5432/{db_name}"
-            try:
-                st.info(f" Tentando conectar via porta 5432...")
-                return psycopg2.connect(database_url)
-            except psycopg2.Error:
-                # Se falhar, tentar com a porta 3000
-                st.warning(" Falha na porta 5432, tentando porta 3000...")
-                database_url = f"postgresql://{db_user}:{db_password}@{db_host}:3000/{db_name}"
-                return psycopg2.connect(database_url)
-        
-        elif not database_url:
-            st.info(" Usando URL pública do PostgreSQL")
-            database_url = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
-        
-        st.info(f" Tentando conectar a: {database_url.split('@')[1]}")  # Mostra só o host, não as credenciais
+        st.info(f" Tentando conectar ao banco de dados...")
         conn = psycopg2.connect(database_url)
         st.success(" Conectado ao banco de dados com sucesso!")
         return conn

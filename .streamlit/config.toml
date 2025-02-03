@@ -1,5 +1,5 @@
 [server]
-port = 8501
+port = 3000
 address = "0.0.0.0"
 headless = true
 enableCORS = false
@@ -8,8 +8,8 @@ maxUploadSize = 200
 maxMessageSize = 200
 
 [browser]
-serverAddress = "projetodashbasic-production.up.railway.app"
 gatherUsageStats = false
+serverAddress = "projetodashbasic-production.up.railway.app"
 
 [theme]
 primaryColor = "#FF4B4B"

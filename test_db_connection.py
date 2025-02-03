@@ -1,37 +1,39 @@
+import psycopg2
 import os
 from dotenv import load_dotenv
-import psycopg2
-from psycopg2 import OperationalError
 
 def test_connection():
-    load_dotenv()  # Carrega as variáveis do arquivo .env
-    
     try:
-        # Obtém a URL do banco de dados do arquivo .env
-        database_url = os.getenv('DATABASE_URL')
+        # Tenta conectar ao banco
+        conn = psycopg2.connect("postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway")
         
-        # Tenta estabelecer a conexão
-        connection = psycopg2.connect(database_url)
+        # Cria um cursor
+        cur = conn.cursor()
         
-        # Se chegou aqui, a conexão foi bem sucedida
-        print("✅ Conexão com o banco de dados estabelecida com sucesso!")
+        # Lista todas as tabelas do banco
+        cur.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+        """)
         
-        # Obtém a versão do PostgreSQL
-        cursor = connection.cursor()
-        cursor.execute('SELECT version();')
-        db_version = cursor.fetchone()
-        print(f"Versão do PostgreSQL: {db_version[0]}")
+        tables = cur.fetchall()
+        print("Conexão bem sucedida!")
+        print("\nTabelas encontradas:")
+        for table in tables:
+            print(f"- {table[0]}")
+            
+            # Conta o número de registros em cada tabela
+            cur.execute(f"SELECT COUNT(*) FROM {table[0]}")
+            count = cur.fetchone()[0]
+            print(f"  Registros: {count}")
         
-        cursor.close()
-        connection.close()
-        print("Conexão fechada.")
+        # Fecha cursor e conexão
+        cur.close()
+        conn.close()
         
-    except OperationalError as e:
-        print("❌ Erro ao conectar ao banco de dados:")
-        print(e)
     except Exception as e:
-        print("❌ Ocorreu um erro inesperado:")
-        print(e)
+        print(f"Erro ao conectar: {str(e)}")
 
 if __name__ == "__main__":
     test_connection()

@@ -1,12 +1,14 @@
 [phases.setup]
-nixPkgs = ['python311', 'postgresql', 'python311Packages.pip']
-aptPkgs = ['python3-dev', 'libpq-dev', 'python3-pip']
+nixPkgs = ['python311', 'postgresql', 'curl']
+aptPkgs = ['python3-dev', 'libpq-dev']
 
 [phases.install]
 cmds = [
-  'python3 -m pip install --upgrade pip',
-  'python3 -m pip install -r requirements.txt'
+  'python3 -m venv /opt/venv',
+  'curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py',
+  'python3 get-pip.py',
+  '/opt/venv/bin/pip install -r requirements.txt'
 ]
 
 [start]
-cmd = "python3 -m streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0"
+cmd = "/opt/venv/bin/python -m streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0"

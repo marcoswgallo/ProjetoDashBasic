@@ -2,11 +2,13 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "python3 -m streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false"
+startCommand = "/opt/venv/bin/python -m streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false"
 restartPolicyType = "ON_FAILURE"
 healthcheckPath = "/"
 healthcheckTimeout = 100
 
 [deploy.envs]
 PYTHONUNBUFFERED = "1"
+VIRTUAL_ENV = "/opt/venv"
+PATH = "/opt/venv/bin:${PATH}"
 DATABASE_URL = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@postgres.ferrovia.interno:5432/railway"

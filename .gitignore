@@ -1,13 +1,9 @@
-# Environment variables
-.env
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -24,7 +20,10 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Environments
+.env
+.venv
+env/
 venv/
 ENV/
 
@@ -37,3 +36,9 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Project specific
+*.xlsx
+*.csv
+*.db
+*.sqlite3

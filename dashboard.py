@@ -5,52 +5,34 @@ import plotly.graph_objects as go
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-import os
-from dotenv import load_dotenv
 import psycopg2
 from datetime import datetime, timedelta
 import folium
 from streamlit_folium import folium_static
 
 # Configuração da página
-st.set_page_config(page_title="Dashboard de Serviços", layout="wide")
+st.set_page_config(
+    page_title="Dashboard de Serviços",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Configurações de cache
+st.cache_data.clear()
 
 # Função para conectar ao banco de dados
+@st.cache_resource(ttl=3600)
 def get_connection():
-    try:
-        st.write(" Conectando ao banco de dados...")
-        
-        # URL pública do PostgreSQL (funciona tanto em dev quanto em prod)
-        database_url = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
-        
-        st.info(f" Tentando conectar ao banco de dados...")
-        conn = psycopg2.connect(database_url)
-        st.success(" Conectado ao banco de dados com sucesso!")
-        return conn
-    except psycopg2.Error as e:
-        st.error(f" Erro ao conectar ao banco de dados: {str(e)}")
-        st.info("Detalhes técnicos para debug:")
-        st.code(f"""
-        Erro: {type(e).__name__}
-        Mensagem: {str(e)}
-        pgcode: {getattr(e, 'pgcode', 'N/A')}
-        pgerror: {getattr(e, 'pgerror', 'N/A')}
-        diag: {getattr(e, 'diag', 'N/A')}
-        """)
-        st.stop()
-    except Exception as e:
-        st.error(f" Erro inesperado: {str(e)}")
-        st.info("Por favor, recarregue a página. Se o erro persistir, entre em contato com o suporte.")
-        st.stop()
+    database_url = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
+    return psycopg2.connect(database_url)
 
 # Função para carregar dados
 @st.cache_data(ttl=3600)
-def load_data():
+def load_data(start_date=None, end_date=None, base=None, limit=10000):
     try:
-        st.write(" Carregando dados...")
         conn = get_connection()
         
-        # Query principal
+        # Query base
         query = """
         SELECT 
             os.id, os.data_execucao, os.contrato, os.latitude, os.longitude,
@@ -65,26 +47,61 @@ def load_data():
         WHERE os.data_execucao IS NOT NULL
         """
         
-        df = pd.read_sql(query, conn)
-        conn.close()
-        st.success(f" Dados carregados com sucesso! ({len(df)} registros)")
+        # Adicionar filtros
+        params = []
+        if start_date and end_date:
+            query += " AND os.data_execucao BETWEEN %s AND %s"
+            params.extend([start_date, end_date])
+        if base and base != 'Todas':
+            query += " AND b.nome = %s"
+            params.append(base)
+            
+        # Adicionar limite
+        query += " LIMIT %s"
+        params.append(limit)
+        
+        df = pd.read_sql(query, conn, params=params)
         return df
     except Exception as e:
-        st.error(f" Erro ao carregar dados: {str(e)}")
-        st.info("Detalhes técnicos para debug:")
-        st.code(str(e))
-        st.stop()
+        st.error(f"Erro ao carregar dados: {str(e)}")
+        return pd.DataFrame()
+
+# Função para carregar datas disponíveis
+@st.cache_data(ttl=3600)
+def load_date_range():
+    try:
+        conn = get_connection()
+        query = """
+        SELECT MIN(data_execucao) as min_date, MAX(data_execucao) as max_date
+        FROM ordens_servico
+        WHERE data_execucao IS NOT NULL
+        """
+        df = pd.read_sql(query, conn)
+        return df['min_date'].iloc[0], df['max_date'].iloc[0]
+    except Exception as e:
+        st.error(f"Erro ao carregar datas: {str(e)}")
+        return datetime.now() - timedelta(days=30), datetime.now()
+
+# Função para carregar bases disponíveis
+@st.cache_data(ttl=3600)
+def load_bases():
+    try:
+        conn = get_connection()
+        query = "SELECT nome FROM bases ORDER BY nome"
+        df = pd.read_sql(query, conn)
+        return ['Todas'] + df['nome'].tolist()
+    except Exception as e:
+        st.error(f"Erro ao carregar bases: {str(e)}")
+        return ['Todas']
 
 try:
-    # Carrega os dados
-    df = load_data()
-
     # Sidebar
     st.sidebar.title("Filtros")
 
+    # Carregar datas disponíveis
+    min_date, max_date = load_date_range()
+    
     # Filtro de data
-    min_date = df['data_execucao'].min()
-    max_date = df['data_execucao'].max()
     date_range = st.sidebar.date_input(
         "Período",
         value=(min_date, max_date),
@@ -93,114 +110,82 @@ try:
     )
 
     # Filtro de base
-    bases = ['Todas'] + sorted(df['base'].unique().tolist())
+    bases = load_bases()
     selected_base = st.sidebar.selectbox('Base', bases)
 
-    # Aplicar filtros
-    mask = (df['data_execucao'].dt.date >= date_range[0]) & (df['data_execucao'].dt.date <= date_range[1])
-    if selected_base != 'Todas':
-        mask &= (df['base'] == selected_base)
-    filtered_df = df[mask]
+    # Limite de registros
+    limit = st.sidebar.slider('Limite de registros', 1000, 50000, 10000, step=1000)
+
+    # Carregar dados filtrados
+    df = load_data(date_range[0], date_range[1], selected_base, limit)
 
     # Layout principal
     st.title("Dashboard de Análise de Serviços")
+    st.info(f"Mostrando {len(df)} registros dos {limit} solicitados")
 
-    # Métricas principais
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total de Serviços", len(filtered_df))
-    with col2:
-        st.metric("Total de Técnicos", filtered_df['tecnico'].nunique())
-    with col3:
-        valor_total = filtered_df['valor_empresa'].sum()
-        st.metric("Valor Total", f"R$ {valor_total:,.2f}")
-    with col4:
-        media_servicos = len(filtered_df) / filtered_df['tecnico'].nunique() if filtered_df['tecnico'].nunique() > 0 else 0
-        st.metric("Média de Serviços por Técnico", f"{media_servicos:.1f}")
+    # Métricas principais em abas
+    tab1, tab2 = st.tabs([" Métricas", " Gráficos"])
+    
+    with tab1:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total de Serviços", len(df))
+        with col2:
+            st.metric("Total de Técnicos", df['tecnico'].nunique())
+        with col3:
+            valor_total = df['valor_empresa'].sum()
+            st.metric("Valor Total", f"R$ {valor_total:,.2f}")
+        with col4:
+            media_servicos = len(df) / df['tecnico'].nunique() if df['tecnico'].nunique() > 0 else 0
+            st.metric("Média de Serviços por Técnico", f"{media_servicos:.1f}")
 
-    # Gráficos
-    st.subheader("Análise Temporal")
-    # Análise temporal de serviços
-    daily_services = filtered_df.groupby(filtered_df['data_execucao'].dt.date).size().reset_index()
-    daily_services.columns = ['data', 'quantidade']
+    with tab2:
+        # Gráficos em abas
+        chart_tab1, chart_tab2, chart_tab3 = st.tabs([" Temporal", " Mapa", " Distribuição"])
+        
+        with chart_tab1:
+            # Análise temporal de serviços
+            daily_services = df.groupby(df['data_execucao'].dt.date).size().reset_index()
+            daily_services.columns = ['data', 'quantidade']
 
-    fig_temporal = px.line(daily_services, x='data', y='quantidade',
-                        title='Evolução Diária de Serviços')
-    st.plotly_chart(fig_temporal, use_container_width=True)
+            fig_temporal = px.line(daily_services, x='data', y='quantidade',
+                                title='Evolução Diária de Serviços')
+            st.plotly_chart(fig_temporal, use_container_width=True)
 
-    # Machine Learning - Clustering de Técnicos
-    if len(filtered_df) > 0:
-        st.subheader("Análise de Performance dos Técnicos")
+        with chart_tab2:
+            # Mapa de calor
+            st.subheader("Distribuição Geográfica dos Serviços")
+            map_df = df[df['latitude'].notna() & df['longitude'].notna()]
 
-        # Preparar dados para clustering
-        tech_metrics = filtered_df.groupby('tecnico').agg({
-            'id': 'count',
-            'valor_tecnico': 'mean',
-            'valor_empresa': 'mean'
-        }).reset_index()
+            if len(map_df) > 0:
+                m = folium.Map(location=[map_df['latitude'].mean(), map_df['longitude'].mean()], 
+                            zoom_start=12)
+                heat_data = [[row['latitude'], row['longitude']] for index, row in map_df.iterrows()]
+                folium.plugins.HeatMap(heat_data).add_to(m)
+                folium_static(m)
+            else:
+                st.info("Sem dados geográficos disponíveis para o período selecionado")
 
-        if len(tech_metrics) >= 3:  # Precisamos de pelo menos 3 técnicos para fazer clustering
-            # Normalizar dados
-            scaler = StandardScaler()
-            X = scaler.fit_transform(tech_metrics[['id', 'valor_tecnico', 'valor_empresa']])
-
-            # Aplicar K-means
-            n_clusters = min(3, len(tech_metrics))
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-            tech_metrics['cluster'] = kmeans.fit_predict(X)
-
-            # Criar gráfico de dispersão 3D
-            fig_3d = px.scatter_3d(tech_metrics, 
-                                x='id', y='valor_tecnico', z='valor_empresa',
-                                color='cluster', text='tecnico',
-                                title='Clustering de Técnicos por Performance',
-                                labels={'id': 'Quantidade de Serviços',
-                                        'valor_tecnico': 'Valor Médio por Técnico',
-                                        'valor_empresa': 'Valor Médio para Empresa'})
-            st.plotly_chart(fig_3d, use_container_width=True)
-        else:
-            st.info("Dados insuficientes para análise de clustering (necessário pelo menos 3 técnicos)")
-
-    # Mapa de calor
-    st.subheader("Distribuição Geográfica dos Serviços")
-    # Filtrar coordenadas válidas
-    map_df = filtered_df[filtered_df['latitude'].notna() & filtered_df['longitude'].notna()]
-
-    if len(map_df) > 0:
-        # Criar mapa
-        m = folium.Map(location=[map_df['latitude'].mean(), map_df['longitude'].mean()], 
-                    zoom_start=12)
-
-        # Adicionar heatmap
-        heat_data = [[row['latitude'], row['longitude']] for index, row in map_df.iterrows()]
-        folium.plugins.HeatMap(heat_data).add_to(m)
-
-        # Exibir mapa
-        folium_static(m)
-    else:
-        st.info("Sem dados geográficos disponíveis para o período selecionado")
-
-    # Análise por tipo de serviço
-    if len(filtered_df) > 0:
-        st.subheader("Distribuição por Tipo de Serviço")
-        service_type_dist = filtered_df['tipo_servico'].value_counts()
-
-        fig_pie = px.pie(values=service_type_dist.values, 
-                        names=service_type_dist.index,
-                        title='Distribuição de Tipos de Serviço')
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-        # Análise de status
-        st.subheader("Status dos Serviços")
-        status_dist = filtered_df['status'].value_counts()
-
-        fig_bar = px.bar(x=status_dist.index, y=status_dist.values,
-                        title='Distribuição de Status',
-                        labels={'x': 'Status', 'y': 'Quantidade'})
-        st.plotly_chart(fig_bar, use_container_width=True)
-    else:
-        st.info("Sem dados disponíveis para o período selecionado")
+        with chart_tab3:
+            if len(df) > 0:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Análise por tipo de serviço
+                    service_type_dist = df['tipo_servico'].value_counts()
+                    fig_pie = px.pie(values=service_type_dist.values, 
+                                names=service_type_dist.index,
+                                title='Distribuição de Tipos de Serviço')
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                
+                with col2:
+                    # Análise de status
+                    status_dist = df['status'].value_counts()
+                    fig_bar = px.bar(x=status_dist.index, y=status_dist.values,
+                                title='Distribuição de Status',
+                                labels={'x': 'Status', 'y': 'Quantidade'})
+                    st.plotly_chart(fig_bar, use_container_width=True)
 
 except Exception as e:
-    st.error(f" Erro inesperado: {str(e)}")
-    st.info("Por favor, recarregue a página. Se o erro persistir, verifique os logs do Railway.")
+    st.error(f"Erro inesperado: {str(e)}")
+    st.info("Por favor, recarregue a página. Se o erro persistir, entre em contato com o suporte.")

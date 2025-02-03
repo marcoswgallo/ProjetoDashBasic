@@ -24,24 +24,15 @@ def get_connection():
     
     database_url = os.getenv('DATABASE_URL')
     
-    # Se for apenas o hostname interno do Railway, construir a URL completa
-    if database_url and '.railway.internal' in database_url and '://' not in database_url:
-        # Usando variáveis de ambiente padrão do PostgreSQL
-        db_user = os.getenv('PGUSER', 'postgres')
-        db_password = os.getenv('PGPASSWORD', '')
-        db_name = os.getenv('PGDATABASE', 'railway')
-        database_url = f"postgresql://{db_user}:{db_password}@{database_url}:5432/{db_name}"
-
+    # Se não houver URL, usar a URL pública do PostgreSQL
     if not database_url:
-        st.error("⚠️ Variável de ambiente DATABASE_URL não encontrada!")
-        st.info("Configure a variável DATABASE_URL no Railway usando ${{ Postgres.DATABASE_URL }}")
-        st.stop()
+        database_url = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
     
     try:
         return psycopg2.connect(database_url)
     except psycopg2.Error as e:
         st.error(f"⚠️ Erro ao conectar ao banco de dados: {str(e)}")
-        st.info("Verifique se o banco PostgreSQL está configurado corretamente no Railway.")
+        st.info("Verifique se o banco PostgreSQL está configurado corretamente.")
         st.stop()
 
 # Função para carregar dados

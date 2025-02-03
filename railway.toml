@@ -3,8 +3,14 @@ builder = "nixpacks"
 
 [deploy]
 numReplicas = 1
-startCommand = ". /opt/venv/bin/activate && streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0"
+startCommand = ". /opt/venv/bin/activate && streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false"
 restartPolicyType = "ON_FAILURE"
+healthcheckPath = "/_stcore/health"
+healthcheckTimeout = 300
 
 [deploy.envs]
 NIXPACKS_PYTHON_VERSION = "3.11"
+STREAMLIT_SERVER_PORT = "$PORT"
+STREAMLIT_SERVER_ADDRESS = "0.0.0.0"
+STREAMLIT_SERVER_HEADLESS = "true"
+STREAMLIT_SERVER_ENABLE_CORS = "false"

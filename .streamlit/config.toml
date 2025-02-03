@@ -1,5 +1,5 @@
 [server]
-port = 8080
+port = 8501
 address = "0.0.0.0"
 headless = true
 enableCORS = false
@@ -20,3 +20,4 @@ font = "sans serif"
 
 [logger]
 level = "info"
+messageFormat = "%(asctime)s %(message)s"

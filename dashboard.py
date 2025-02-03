@@ -17,28 +17,45 @@ st.set_page_config(page_title="Dashboard de Serviços", layout="wide")
 
 # Função para conectar ao banco de dados
 def get_connection():
-    # Em produção, o Railway já fornece a DATABASE_URL como variável de ambiente
-    # Em desenvolvimento local, carregamos do .env
-    if not os.getenv('RAILWAY_ENVIRONMENT'):
-        load_dotenv()
-    
-    database_url = os.getenv('DATABASE_URL')
-    
-    # Se não houver URL, usar a URL pública do PostgreSQL
-    if not database_url:
-        database_url = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
-    
     try:
-        return psycopg2.connect(database_url)
+        st.write(" Conectando ao banco de dados...")
+        
+        # Em produção, o Railway já fornece a DATABASE_URL como variável de ambiente
+        # Em desenvolvimento local, carregamos do .env
+        if not os.getenv('RAILWAY_ENVIRONMENT'):
+            load_dotenv()
+        
+        database_url = os.getenv('DATABASE_URL')
+        
+        # Se não houver URL, usar a URL pública do PostgreSQL
+        if not database_url:
+            st.info(" Usando URL pública do PostgreSQL")
+            database_url = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
+        
+        conn = psycopg2.connect(database_url)
+        st.success(" Conectado ao banco de dados com sucesso!")
+        return conn
     except psycopg2.Error as e:
-        st.error(f"⚠️ Erro ao conectar ao banco de dados: {str(e)}")
-        st.info("Verifique se o banco PostgreSQL está configurado corretamente.")
+        st.error(f" Erro ao conectar ao banco de dados: {str(e)}")
+        st.info("Detalhes técnicos para debug:")
+        st.code(f"""
+        Erro: {type(e).__name__}
+        Mensagem: {str(e)}
+        pgcode: {getattr(e, 'pgcode', 'N/A')}
+        pgerror: {getattr(e, 'pgerror', 'N/A')}
+        diag: {getattr(e, 'diag', 'N/A')}
+        """)
+        st.stop()
+    except Exception as e:
+        st.error(f" Erro inesperado: {str(e)}")
+        st.info("Por favor, recarregue a página. Se o erro persistir, entre em contato com o suporte.")
         st.stop()
 
 # Função para carregar dados
 @st.cache_data(ttl=3600)
 def load_data():
     try:
+        st.write(" Carregando dados...")
         conn = get_connection()
         
         # Query principal
@@ -58,10 +75,12 @@ def load_data():
         
         df = pd.read_sql(query, conn)
         conn.close()
+        st.success(f" Dados carregados com sucesso! ({len(df)} registros)")
         return df
     except Exception as e:
-        st.error(f"⚠️ Erro ao carregar dados: {str(e)}")
-        st.info("Verifique se as tabelas foram criadas e os dados foram importados corretamente.")
+        st.error(f" Erro ao carregar dados: {str(e)}")
+        st.info("Detalhes técnicos para debug:")
+        st.code(str(e))
         st.stop()
 
 try:
@@ -191,5 +210,5 @@ try:
         st.info("Sem dados disponíveis para o período selecionado")
 
 except Exception as e:
-    st.error(f"⚠️ Erro inesperado: {str(e)}")
+    st.error(f" Erro inesperado: {str(e)}")
     st.info("Por favor, recarregue a página. Se o erro persistir, verifique os logs do Railway.")

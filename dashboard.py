@@ -27,11 +27,31 @@ def get_connection():
         
         database_url = os.getenv('DATABASE_URL')
         
-        # Se não houver URL, usar a URL pública do PostgreSQL
-        if not database_url:
+        # Se for apenas o hostname interno do Railway, construir a URL completa
+        if database_url and database_url.endswith('.railway.internal'):
+            st.info(" Usando conexão interna do Railway")
+            # Usando variáveis de ambiente do Railway
+            db_host = database_url  # Ex: basictelecom.railway.internal
+            db_user = os.getenv('PGUSER', 'postgres')
+            db_password = os.getenv('PGPASSWORD', 'fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa')
+            db_name = os.getenv('PGDATABASE', 'railway')
+            
+            # Tentar primeiro com a porta padrão do PostgreSQL
+            database_url = f"postgresql://{db_user}:{db_password}@{db_host}:5432/{db_name}"
+            try:
+                st.info(f" Tentando conectar via porta 5432...")
+                return psycopg2.connect(database_url)
+            except psycopg2.Error:
+                # Se falhar, tentar com a porta 3000
+                st.warning(" Falha na porta 5432, tentando porta 3000...")
+                database_url = f"postgresql://{db_user}:{db_password}@{db_host}:3000/{db_name}"
+                return psycopg2.connect(database_url)
+        
+        elif not database_url:
             st.info(" Usando URL pública do PostgreSQL")
             database_url = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
         
+        st.info(f" Tentando conectar a: {database_url.split('@')[1]}")  # Mostra só o host, não as credenciais
         conn = psycopg2.connect(database_url)
         st.success(" Conectado ao banco de dados com sucesso!")
         return conn

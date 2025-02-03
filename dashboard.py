@@ -66,24 +66,8 @@ def load_data(start_date=None, end_date=None, base=None):
             query += " AND b.nome = %s"
             params.append(base)
 
-        # Dividir a query em chunks por data para processamento paralelo
-        if start_date and end_date:
-            date_range = pd.date_range(start_date, end_date, freq='M')
-            queries = []
-            for i in range(len(date_range)):
-                chunk_start = date_range[i]
-                chunk_end = date_range[i + 1] if i + 1 < len(date_range) else end_date
-                chunk_query = query + f" AND os.data_execucao BETWEEN '{chunk_start}' AND '{chunk_end}'"
-                queries.append((chunk_query, []))
-
-            # Executar queries em paralelo
-            with ThreadPoolExecutor(max_workers=8) as executor:
-                dfs = list(executor.map(lambda x: execute_parallel_query(x[0], x[1]), queries))
-            
-            # Combinar resultados
-            df = pd.concat(dfs, ignore_index=True)
-        else:
-            df = execute_parallel_query(query, params)
+        # Executar query
+        df = execute_parallel_query(query, params)
 
         return df
 
@@ -144,7 +128,7 @@ try:
 
     # Layout principal
     st.title("Dashboard de Análise de Serviços")
-    st.info(f"Total de registros carregados: {len(df):,}")
+    st.success(f"Total de registros carregados: {len(df):,}")
 
     # Métricas principais em abas
     tab1, tab2 = st.tabs([" Métricas", " Gráficos"])

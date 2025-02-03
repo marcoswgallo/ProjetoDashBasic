@@ -17,12 +17,17 @@ st.set_page_config(page_title="Dashboard de Serviços", layout="wide")
 
 # Função para conectar ao banco de dados
 def get_connection():
-    load_dotenv()
+    # Em produção, o Railway já fornece a DATABASE_URL como variável de ambiente
+    # Em desenvolvimento local, carregamos do .env
+    if not os.getenv('RAILWAY_ENVIRONMENT'):
+        load_dotenv()
+    
     database_url = os.getenv('DATABASE_URL')
     if not database_url:
         st.error("⚠️ Variável de ambiente DATABASE_URL não encontrada!")
         st.info("Configure a variável DATABASE_URL no Railway com a URL de conexão do PostgreSQL.")
         st.stop()
+    
     try:
         return psycopg2.connect(database_url)
     except psycopg2.Error as e:

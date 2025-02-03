@@ -5,8 +5,8 @@ builder = "nixpacks"
 numReplicas = 1
 startCommand = ". /opt/venv/bin/activate && streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.baseUrlPath /"
 restartPolicyType = "ON_FAILURE"
-healthcheckPath = "/_stcore/health"
-healthcheckTimeout = 300
+healthcheckPath = "/"
+healthcheckTimeout = 100
 
 [deploy.envs]
 NIXPACKS_PYTHON_VERSION = "3.11"

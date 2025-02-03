@@ -1,5 +1,6 @@
 [phases.setup]
 nixPkgs = ['python311', 'postgresql', 'gcc']
+aptPkgs = ['libpq-dev']
 
 [phases.install]
 cmds = [

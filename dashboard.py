@@ -201,7 +201,8 @@ try:
         
         # Total de Serviços (contratos únicos por data)
         with col1:
-            total_servicos = df.groupby(['contrato', 'data_execucao']).size().reset_index()[0].sum()
+            # Conta quantos contratos únicos existem por data
+            total_servicos = len(df.groupby(['contrato', 'data_execucao']).size())
             st.metric("Total de Serviços", f"{total_servicos:,}")
         
         # Total de Técnicos
@@ -216,8 +217,9 @@ try:
         
         # Média de Serviços por Técnico (usando a mesma lógica do total de serviços)
         with col4:
-            servicos_por_tecnico = df.groupby(['tecnico', 'contrato', 'data_execucao']).size().reset_index()
-            media_servicos = servicos_por_tecnico.groupby('tecnico').size().mean()
+            # Conta serviços únicos por técnico
+            servicos_por_tecnico = df.groupby('tecnico').apply(lambda x: len(x.groupby(['contrato', 'data_execucao'])))
+            media_servicos = servicos_por_tecnico.mean() if len(servicos_por_tecnico) > 0 else 0
             st.metric("Média de Serviços por Técnico", f"{media_servicos:,.1f}")
 
     with tab2:

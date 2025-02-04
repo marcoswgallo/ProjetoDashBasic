@@ -42,6 +42,64 @@ def execute_query(query, params=None):
         if conn:
             conn.close()
 
+# Definir as bases por categoria
+BASES_INSTALACAO = [
+    'BASE BAURU',
+    'BASE BOTUCATU',
+    'BASE CAMPINAS',
+    'BASE LIMEIRA',
+    'BASE PAULINIA',
+    'BASE PIRACICABA',
+    'BASE RIBEIRAO PRETO',
+    'BASE SAO JOSE DO RIO PRETO',
+    'BASE SOROCABA',
+    'BASE SUMARE',
+    'GPON BAURU',
+    'GPON RIBEIRAO PRETO'
+]
+
+BASES_MANUTENCAO = [
+    'BASE ARARAS VT',
+    'BASE BOTUCATU VT',
+    'BASE MDU ARARAS',
+    'BASE MDU BAURU',
+    'BASE MDU MOGI',
+    'BASE MDU PIRACICABA',
+    'BASE MDU SJRP',
+    'BASE PIRACICABA VT',
+    'BASE RIBEIRÃO VT',
+    'BASE SERTAOZINHO VT',
+    'BASE SUMARE VT',
+    'BASE VAR BAURU',
+    'BASE VAR PIRACICABA',
+    'BASE VAR SUMARE'
+]
+
+BASES_DESCONEXAO = [
+    'DESCONEXAO',
+    'DESCONEXÃO BOTUCATU',
+    'DESCONEXÃO CAMPINAS',
+    'DESCONEXAO RIBEIRAO PRETO'
+]
+
+# Função para carregar bases disponíveis
+@st.cache_data(ttl=3600)
+def load_bases(tipo_base='INSTALACAO'):
+    try:
+        if tipo_base == 'INSTALACAO':
+            bases = BASES_INSTALACAO
+        elif tipo_base == 'MANUTENCAO':
+            bases = BASES_MANUTENCAO
+        elif tipo_base == 'DESCONEXAO':
+            bases = BASES_DESCONEXAO
+        else:
+            bases = BASES_INSTALACAO + BASES_MANUTENCAO + BASES_DESCONEXAO
+        
+        return ['Todas'] + sorted(bases)
+    except Exception as e:
+        st.error(f"Erro ao carregar bases: {str(e)}")
+        return ['Todas']
+
 # Função para carregar dados
 @st.cache_data(ttl=3600)
 def load_data(start_date=None, end_date=None, base=None):
@@ -92,19 +150,6 @@ def load_date_range():
         st.error(f"Erro ao carregar datas: {str(e)}")
         return datetime.now() - timedelta(days=30), datetime.now()
 
-# Função para carregar bases disponíveis
-@st.cache_data(ttl=3600)
-def load_bases():
-    try:
-        query = "SELECT nome FROM bases ORDER BY nome"
-        df = execute_query(query)
-        if df.empty:
-            return ['Todas']
-        return ['Todas'] + df['nome'].tolist()
-    except Exception as e:
-        st.error(f"Erro ao carregar bases: {str(e)}")
-        return ['Todas']
-
 try:
     # Sidebar
     st.sidebar.title("Filtros")
@@ -120,13 +165,29 @@ try:
         max_value=max_date
     )
 
+    # Filtro de tipo de base
+    tipo_base = st.sidebar.selectbox(
+        'Tipo de Base',
+        ['INSTALACAO', 'MANUTENCAO', 'DESCONEXAO', 'TODAS'],
+        index=0  # Começa com INSTALACAO selecionado
+    )
+
     # Filtro de base
-    bases = load_bases()
+    bases = load_bases(tipo_base)
     selected_base = st.sidebar.selectbox('Base', bases)
 
     # Carregar dados filtrados
     with st.spinner('Carregando dados...'):
         df = load_data(date_range[0], date_range[1], selected_base)
+        
+        # Filtrar por tipo de base se não for 'Todas'
+        if tipo_base != 'TODAS' and selected_base == 'Todas':
+            if tipo_base == 'INSTALACAO':
+                df = df[df['base'].isin(BASES_INSTALACAO)]
+            elif tipo_base == 'MANUTENCAO':
+                df = df[df['base'].isin(BASES_MANUTENCAO)]
+            elif tipo_base == 'DESCONEXAO':
+                df = df[df['base'].isin(BASES_DESCONEXAO)]
 
     # Layout principal
     st.title("Dashboard de Análise de Serviços")

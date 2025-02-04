@@ -22,22 +22,25 @@ st.set_page_config(
 # Configurações de cache e performance
 st.cache_data.clear()
 
-# Configurações de thread pool para queries paralelas
-thread_pool = ThreadPoolExecutor(max_workers=8)
-
 # Função para conectar ao banco de dados
-@st.cache_resource(ttl=3600)
 def get_connection():
-    database_url = "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
-    return psycopg2.connect(database_url)
+    return psycopg2.connect(
+        "postgresql://postgres:fvPCqIuJkOHZxVtzPgmYbiYDbikhylXa@roundhouse.proxy.rlwy.net:10419/railway"
+    )
 
-# Função para executar queries em paralelo
-def execute_parallel_query(query, params=None):
-    conn = get_connection()
+# Função para executar queries de forma segura
+def execute_query(query, params=None):
+    conn = None
     try:
-        return pd.read_sql(query, conn, params=params)
+        conn = get_connection()
+        df = pd.read_sql(query, conn, params=params)
+        return df
+    except Exception as e:
+        st.error(f"Erro ao executar query: {str(e)}")
+        return pd.DataFrame()
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 # Função para carregar dados
 @st.cache_data(ttl=3600)
@@ -66,10 +69,7 @@ def load_data(start_date=None, end_date=None, base=None):
             query += " AND b.nome = %s"
             params.append(base)
 
-        # Executar query
-        df = execute_parallel_query(query, params)
-
-        return df
+        return execute_query(query, params)
 
     except Exception as e:
         st.error(f"Erro ao carregar dados: {str(e)}")
@@ -79,13 +79,14 @@ def load_data(start_date=None, end_date=None, base=None):
 @st.cache_data(ttl=3600)
 def load_date_range():
     try:
-        conn = get_connection()
         query = """
         SELECT MIN(data_execucao) as min_date, MAX(data_execucao) as max_date
         FROM ordens_servico
         WHERE data_execucao IS NOT NULL
         """
-        df = pd.read_sql(query, conn)
+        df = execute_query(query)
+        if df.empty:
+            return datetime.now() - timedelta(days=30), datetime.now()
         return df['min_date'].iloc[0], df['max_date'].iloc[0]
     except Exception as e:
         st.error(f"Erro ao carregar datas: {str(e)}")
@@ -95,9 +96,10 @@ def load_date_range():
 @st.cache_data(ttl=3600)
 def load_bases():
     try:
-        conn = get_connection()
         query = "SELECT nome FROM bases ORDER BY nome"
-        df = pd.read_sql(query, conn)
+        df = execute_query(query)
+        if df.empty:
+            return ['Todas']
         return ['Todas'] + df['nome'].tolist()
     except Exception as e:
         st.error(f"Erro ao carregar bases: {str(e)}")

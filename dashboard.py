@@ -198,15 +198,26 @@ try:
     
     with tab1:
         col1, col2, col3, col4 = st.columns(4)
+        
+        # Total de Serviços (contratos únicos por data)
         with col1:
-            st.metric("Total de Serviços", f"{len(df):,}")
+            total_servicos = df.groupby(['contrato', 'data_execucao']).size().reset_index()[0].sum()
+            st.metric("Total de Serviços", f"{total_servicos:,}")
+        
+        # Total de Técnicos
         with col2:
             st.metric("Total de Técnicos", f"{df['tecnico'].nunique():,}")
+        
+        # Valor Total (apenas status Executado)
         with col3:
-            valor_total = df['valor_empresa'].sum()
+            df_executado = df[df['status'] == 'Executado']
+            valor_total = df_executado['valor_empresa'].sum()
             st.metric("Valor Total", f"R$ {valor_total:,.2f}")
+        
+        # Média de Serviços por Técnico (usando a mesma lógica do total de serviços)
         with col4:
-            media_servicos = len(df) / df['tecnico'].nunique() if df['tecnico'].nunique() > 0 else 0
+            servicos_por_tecnico = df.groupby(['tecnico', 'contrato', 'data_execucao']).size().reset_index()
+            media_servicos = servicos_por_tecnico.groupby('tecnico').size().mean()
             st.metric("Média de Serviços por Técnico", f"{media_servicos:,.1f}")
 
     with tab2:

@@ -11,6 +11,16 @@ import folium
 from streamlit_folium import folium_static
 from concurrent.futures import ThreadPoolExecutor
 import threading
+import locale
+
+# Configurar locale para português do Brasil
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+except:
+    try:
+        locale.setlocale(locale.LC_ALL, 'Portuguese_Brazil.1252')
+    except:
+        pass
 
 # Configuração da página
 st.set_page_config(
@@ -21,6 +31,10 @@ st.set_page_config(
 
 # Configurações de cache e performance
 st.cache_data.clear()
+
+# Função para formatar data no padrão brasileiro
+def format_date(date):
+    return date.strftime('%d/%m/%Y')
 
 # Função para conectar ao banco de dados
 def get_connection():
@@ -158,12 +172,19 @@ try:
     min_date, max_date = load_date_range()
     
     # Filtro de data
-    date_range = st.sidebar.date_input(
-        "Período",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date
-    )
+    col1_date = st.sidebar.container()
+    with col1_date:
+        st.write("Período")
+        date_range = st.date_input(
+            "",  # Label vazio pois já mostramos "Período" acima
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+            format="DD/MM/YYYY"  # Formato brasileiro
+        )
+
+    # Mostrar período selecionado em formato brasileiro
+    st.sidebar.write(f"Selecionado: {format_date(date_range[0])} - {format_date(date_range[1])}")
 
     # Filtro de tipo de base
     tipo_base = st.sidebar.selectbox(
@@ -230,9 +251,20 @@ try:
             # Análise temporal de serviços com agregação otimizada
             daily_services = df.set_index('data_execucao').resample('D').size().reset_index()
             daily_services.columns = ['data', 'quantidade']
+            
+            # Formatar datas para o padrão brasileiro
+            daily_services['data_formatada'] = daily_services['data'].apply(format_date)
 
             fig_temporal = px.line(daily_services, x='data', y='quantidade',
                                 title='Evolução Diária de Serviços')
+            
+            # Configurar formato brasileiro no eixo X
+            fig_temporal.update_xaxes(
+                tickformat="%d/%m/%Y",
+                title="Data"
+            )
+            fig_temporal.update_yaxes(title="Quantidade de Serviços")
+            
             st.plotly_chart(fig_temporal, use_container_width=True)
 
         with chart_tab2:

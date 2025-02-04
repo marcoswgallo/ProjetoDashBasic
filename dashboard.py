@@ -96,24 +96,6 @@ BASES_DESCONEXAO = [
     'DESCONEXAO RIBEIRAO PRETO'
 ]
 
-# Função para carregar bases disponíveis
-@st.cache_data(ttl=3600)
-def load_bases(tipo_base='INSTALACAO'):
-    try:
-        if tipo_base == 'INSTALACAO':
-            bases = BASES_INSTALACAO
-        elif tipo_base == 'MANUTENCAO':
-            bases = BASES_MANUTENCAO
-        elif tipo_base == 'DESCONEXAO':
-            bases = BASES_DESCONEXAO
-        else:
-            bases = BASES_INSTALACAO + BASES_MANUTENCAO + BASES_DESCONEXAO
-        
-        return ['Todas'] + sorted(bases)
-    except Exception as e:
-        st.error(f"Erro ao carregar bases: {str(e)}")
-        return ['Todas']
-
 # Função para carregar dados
 @st.cache_data(ttl=3600)
 def load_data(start_date=None, end_date=None, base=None):
@@ -121,15 +103,22 @@ def load_data(start_date=None, end_date=None, base=None):
         # Query base
         query = """
         SELECT 
-            os.id, os.data_execucao, os.contrato, os.latitude, os.longitude,
-            os.valor_tecnico, os.valor_empresa,
-            b.nome as base, t.nome as tecnico, s.nome as status,
+            os.id, 
+            os.data_execucao, 
+            os.contrato, 
+            os.latitude, 
+            os.longitude,
+            os.valor_tecnico, 
+            os.valor_empresa,
+            b.nome as base, 
+            t.nome as tecnico, 
+            s.nome as status,
             ts.nome as tipo_servico
         FROM ordens_servico os
-        LEFT JOIN bases b ON b.id = os.base_id
-        LEFT JOIN tecnicos t ON t.id = os.tecnico_id
-        LEFT JOIN status_os s ON s.id = os.status_id
-        LEFT JOIN tipos_servico ts ON ts.id = os.tipo_servico_id
+        JOIN bases b ON b.id = os.base_id
+        JOIN tecnicos t ON t.id = os.tecnico_id
+        JOIN status_os s ON s.id = os.status_id
+        JOIN tipos_servico ts ON ts.id = os.tipo_servico_id
         WHERE os.data_execucao IS NOT NULL
         """
         
@@ -140,6 +129,8 @@ def load_data(start_date=None, end_date=None, base=None):
         if base and base != 'Todas':
             query += " AND b.nome = %s"
             params.append(base)
+        
+        query += " ORDER BY os.data_execucao"
 
         return execute_query(query, params)
 
@@ -163,6 +154,24 @@ def load_date_range():
     except Exception as e:
         st.error(f"Erro ao carregar datas: {str(e)}")
         return datetime.now() - timedelta(days=30), datetime.now()
+
+# Função para carregar bases disponíveis
+@st.cache_data(ttl=3600)
+def load_bases(tipo_base='INSTALACAO'):
+    try:
+        if tipo_base == 'INSTALACAO':
+            bases = BASES_INSTALACAO
+        elif tipo_base == 'MANUTENCAO':
+            bases = BASES_MANUTENCAO
+        elif tipo_base == 'DESCONEXAO':
+            bases = BASES_DESCONEXAO
+        else:
+            bases = BASES_INSTALACAO + BASES_MANUTENCAO + BASES_DESCONEXAO
+        
+        return ['Todas'] + sorted(bases)
+    except Exception as e:
+        st.error(f"Erro ao carregar bases: {str(e)}")
+        return ['Todas']
 
 try:
     # Sidebar
@@ -220,28 +229,30 @@ try:
     with tab1:
         col1, col2, col3, col4 = st.columns(4)
         
-        # Total de Serviços (apenas contratos únicos)
-        with col1:
-            # Filtra apenas status Executado e conta contratos únicos
-            df_executado = df[df['status'] == 'Executado']
-            total_servicos = df_executado['contrato'].nunique()
-            st.metric("Total de Serviços", f"{total_servicos:,}")
+        # Filtra dados executados
+        df_executado = df[df['status'] == 'Executado']
         
-        # Total de Técnicos
+        # Total de Serviços (apenas contratos únicos executados)
+        with col1:
+            total_servicos = df_executado['contrato'].nunique()
+            st.metric("Total de Contratos Executados", f"{total_servicos:,}")
+        
+        # Total de Técnicos Ativos (que têm serviços executados)
         with col2:
-            st.metric("Total de Técnicos", f"{df['tecnico'].nunique():,}")
+            total_tecnicos = df_executado['tecnico'].nunique()
+            st.metric("Total de Técnicos Ativos", f"{total_tecnicos:,}")
         
         # Valor Total (apenas status Executado)
         with col3:
             valor_total = df_executado['valor_empresa'].sum()
-            st.metric("Valor Total", f"R$ {valor_total:,.2f}")
+            st.metric("Valor Total (Executados)", f"R$ {valor_total:,.2f}")
         
         # Média de Serviços por Técnico
         with col4:
-            # Conta contratos únicos por técnico
+            # Conta contratos únicos executados por técnico
             servicos_por_tecnico = df_executado.groupby('tecnico')['contrato'].nunique()
             media_servicos = servicos_por_tecnico.mean() if len(servicos_por_tecnico) > 0 else 0
-            st.metric("Média de Serviços por Técnico", f"{media_servicos:,.1f}")
+            st.metric("Média de Contratos por Técnico", f"{media_servicos:,.1f}")
 
     with tab2:
         # Gráficos em abas
